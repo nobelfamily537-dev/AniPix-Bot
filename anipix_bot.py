@@ -173,7 +173,7 @@ Enjoy AniPix! \U0001f389"""
             if not found:
                 send_telegram_message(chat_id, "\u274c No pending OTP. Request OTP from the AniPix app first.")
         
-        elif is_admin and text.strip().split("@")[0] == "/users":
+        elif is_admin and text.strip().split("@")[0] in ["/users", "/user"]:
             users_list = users.get("users", [])
             if not users_list:
                 send_telegram_message(chat_id, "\U0001f4ca No users registered yet.")
