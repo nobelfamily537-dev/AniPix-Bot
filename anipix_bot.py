@@ -112,12 +112,13 @@ def telegram_webhook():
         msg = data["message"]
         chat_id = msg["chat"]["id"]
         text = msg.get("text", "")
+        print(f"DEBUG: Received text='{text}' from chat_id={chat_id}, user={user_info}")
         user_info = msg.get("from", {})
         
         users = load_users()
         
         if not users.get("admin_telegram_id"):
-            if text.strip().split("@")[0] == "/setup":
+            if "setup" in text.lower().strip():
                 sender_username = user_info.get("username", "")
                 users["admin_telegram_id"] = str(chat_id)
                 users["admin_username"] = sender_username
