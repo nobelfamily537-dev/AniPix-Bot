@@ -112,7 +112,6 @@ def telegram_webhook():
         msg = data["message"]
         chat_id = msg["chat"]["id"]
         text = msg.get("text", "")
-        print(f"DEBUG: Received text='{text}' from chat_id={chat_id}, user={user_info}")
         user_info = msg.get("from", {})
         
         users = load_users()
@@ -352,6 +351,31 @@ def check_phone():
     user_exists = any(u.get("phone") == phone for u in users_list)
     
     return jsonify({"exists": user_exists})
+
+
+@app.route("/setwebhook", methods=["GET"])
+def set_webhook_manual():
+    """Manually set webhook - visit this URL in browser"""
+    import requests
+    base_url = request.host_url.rstrip("/")
+    webhook_path = f"{base_url}/webhook/{BOT_TOKEN}"
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+    try:
+        resp = requests.post(url, json={"url": webhook_path}, timeout=10)
+        return f"Webhook set! URL: {webhook_path}<br>Response: {resp.text}"
+    except Exception as e:
+        return f"Error: {e}"
+
+@app.route("/getwebhook", methods=["GET"])  
+def get_webhook_info():
+    """Check webhook status"""
+    import requests
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getWebhookInfo"
+    try:
+        resp = requests.get(url, timeout=10)
+        return f"<pre>{resp.text}</pre>"
+    except Exception as e:
+        return f"Error: {e}"
 
 @app.route("/health", methods=["GET"])
 def health():
