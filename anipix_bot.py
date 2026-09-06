@@ -117,14 +117,21 @@ def telegram_webhook():
         users = load_users()
         
         if not users.get("admin_telegram_id"):
-            if "setup" in text.lower().strip():
+            print(f"DEBUG SETUP: admin_telegram_id is None, text='{text}', lower='{text.lower()}'")
+            # Check for /setup command (handle /setup and /setup@bot)
+            cmd = text.strip().split("@")[0].lower().strip()
+            print(f"DEBUG SETUP: cmd='{cmd}'")
+            if cmd == "/setup" or "setup" in text.lower():
+                print("DEBUG SETUP: Matched! Setting admin...")
                 sender_username = user_info.get("username", "")
                 users["admin_telegram_id"] = str(chat_id)
                 users["admin_username"] = sender_username
-                save_users(users)
+                save_result = save_users(users)
+                print(f"DEBUG SETUP: save_users result={save_result}")
                 send_telegram_message(chat_id, "\u2705 <b>Admin Set!</b>\n\nYou are now the admin of AniPix bot.\n\nCommands:\n/users - List all users\n/broadcast <message> - Send message to all users\n/stats - Show user stats\n/help - Show all commands")
                 return jsonify({"ok": True})
             else:
+                print(f"DEBUG SETUP: No match. Sending else message.")
                 send_telegram_message(chat_id, "\U0001f527 Bot needs admin setup. Send /setup to become admin.")
                 return jsonify({"ok": True})
         
