@@ -358,6 +358,8 @@ def set_webhook_manual():
     """Manually set webhook - visit this URL in browser"""
     import requests
     base_url = request.host_url.rstrip("/")
+    if base_url.startswith("http://"):
+        base_url = "https://" + base_url[7:]
     webhook_path = f"{base_url}/webhook/{BOT_TOKEN}"
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
     try:
@@ -390,6 +392,8 @@ def set_webhook():
         return
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+    if webhook_url.startswith("http://"):
+        webhook_url = "https://" + webhook_url[7:]
     webhook_path = f"{webhook_url}/webhook/{BOT_TOKEN}"
     try:
         resp = requests.post(url, json={"url": webhook_path}, timeout=10)
