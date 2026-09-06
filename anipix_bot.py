@@ -62,10 +62,13 @@ def save_users(users_data):
             data["sha"] = sha
         
         resp = requests.put(url, headers=headers, json=data, timeout=10)
-        return resp.status_code in [200, 201]
+        if resp.status_code in [200, 201]:
+            return "OK"
+        else:
+            return f"HTTP {resp.status_code}: {resp.text[:200]}"
     except Exception as e:
         print(f"Save users error: {e}")
-        return False
+        return f"ERROR: {e}"
 
 def send_telegram_message(chat_id, text, keyboard=None):
     """Send message via Telegram Bot API"""
@@ -125,7 +128,7 @@ def telegram_webhook():
                 users["admin_telegram_id"] = str(chat_id)
                 users["admin_username"] = sender_username
                 save_result = save_users(users)
-                send_telegram_message(chat_id, f"DEBUG: save_result={save_result}")
+                send_telegram_message(chat_id, f"DEBUG: save_result={save_result} | GITHUB_REPO={GITHUB_REPO} | token_set={bool(GITHUB_TOKEN)}")
                 send_telegram_message(chat_id, "\u2705 <b>Admin Set!</b>\n\nYou are now the admin of AniPix bot.\n\nCommands:\n/users - List all users\n/broadcast <message> - Send message to all users\n/stats - Show user stats\n/help - Show all commands")
                 return jsonify({"ok": True})
             else:
