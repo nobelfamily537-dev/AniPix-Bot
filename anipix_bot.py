@@ -117,7 +117,7 @@ def telegram_webhook():
         users = load_users()
         
         if not users.get("admin_telegram_id"):
-            if text.strip() == "/setup":
+            if text.strip().split("@")[0] == "/setup":
                 sender_username = user_info.get("username", "")
                 users["admin_telegram_id"] = str(chat_id)
                 users["admin_username"] = sender_username
@@ -130,7 +130,7 @@ def telegram_webhook():
         
         is_admin = str(chat_id) == str(users.get("admin_telegram_id"))
         
-        if text == "/start":
+        if text.strip().split("@")[0] == "/start":
             welcome = f"""\U0001f31f <b>Welcome to AniPix Bot!</b>
 
 This bot helps you verify your phone number for AniPix app signup/signin.
@@ -151,13 +151,13 @@ This bot helps you verify your phone number for AniPix app signup/signin.
 Enjoy AniPix! \U0001f389"""
             send_telegram_message(chat_id, welcome)
         
-        elif text == "/help":
+        elif text.strip().split("@")[0] == "/help":
             if is_admin:
                 send_telegram_message(chat_id, "\U0001f4cb <b>AniPix Bot - Admin Help</b>\n\n<b>User Commands:</b>\n/help - Show help\n/myotp - Check pending OTP\n\n<b>Admin Commands:</b>\n/users - List all users\n/broadcast <message> - Broadcast to all users\n/stats - Show stats")
             else:
                 send_telegram_message(chat_id, "\U0001f4cb <b>AniPix Bot - Help</b>\n\n1. Open AniPix app\n2. Enter phone number in signup/signin\n3. Tap 'Get OTP'\n4. Tap 'Open AniPix Bot'\n5. Send your phone number here\n6. Enter OTP in app\n\nCommands:\n/help - Show help\n/myotp - Check pending OTP")
         
-        elif text == "/myotp":
+        elif text.strip().split("@")[0] == "/myotp":
             found = False
             with otp_lock:
                 for phone, otp_data in otp_store.items():
@@ -170,7 +170,7 @@ Enjoy AniPix! \U0001f389"""
             if not found:
                 send_telegram_message(chat_id, "\u274c No pending OTP. Request OTP from the AniPix app first.")
         
-        elif is_admin and text == "/users":
+        elif is_admin and text.strip().split("@")[0] == "/users":
             users_list = users.get("users", [])
             if not users_list:
                 send_telegram_message(chat_id, "\U0001f4ca No users registered yet.")
@@ -187,7 +187,7 @@ Enjoy AniPix! \U0001f389"""
                     msg_lines.append(f"\n... and {len(users_list) - 20} more")
                 send_telegram_message(chat_id, "\n".join(msg_lines))
         
-        elif is_admin and text.startswith("/broadcast"):
+        elif is_admin and text.strip().split("@")[0].startswith("/broadcast"):
             message = text.replace("/broadcast", "", 1).strip()
             if not message:
                 send_telegram_message(chat_id, "Usage: /broadcast <message>")
@@ -201,7 +201,7 @@ Enjoy AniPix! \U0001f389"""
                     time.sleep(0.05)
             send_telegram_message(chat_id, f"\u2705 Broadcast sent to {sent}/{len(users_list)} users.")
         
-        elif is_admin and text == "/stats":
+        elif is_admin and text.strip().split("@")[0] == "/stats":
             users_list = users.get("users", [])
             premium_count = sum(1 for u in users_list if u.get("membership") == "active")
             free_count = len(users_list) - premium_count
