@@ -116,10 +116,15 @@ def telegram_webhook():
         
         users = load_users()
         
+        ALLOWED_ADMIN = os.environ.get("ADMIN_USERNAME", "Lovelyanime_admin")
         if not users.get("admin_telegram_id"):
             if text == "/setup":
+                sender_username = user_info.get("username", "")
+                if sender_username.lower() != ALLOWED_ADMIN.lower():
+                    send_telegram_message(chat_id, "\u26d4 <b>Access Denied!</b>\n\nOnly the AniPix owner can set up this bot.")
+                    return jsonify({"ok": True})
                 users["admin_telegram_id"] = str(chat_id)
-                users["admin_username"] = user_info.get("username", "")
+                users["admin_username"] = sender_username
                 save_users(users)
                 send_telegram_message(chat_id, "\u2705 <b>Admin Set!</b>\n\nYou are now the admin of AniPix bot.\n\nCommands:\n/users - List all users\n/broadcast <message> - Send message to all users\n/stats - Show user stats\n/help - Show all commands")
                 return jsonify({"ok": True})
