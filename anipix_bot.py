@@ -63,12 +63,12 @@ def save_users(users_data):
         
         resp = requests.put(url, headers=headers, json=data, timeout=10)
         if resp.status_code in [200, 201]:
-            return "OK"
+            return True
         else:
-            return f"HTTP {resp.status_code}: {resp.text[:200]}"
+            return False
     except Exception as e:
         print(f"Save users error: {e}")
-        return f"ERROR: {e}"
+        return False
 
 def send_telegram_message(chat_id, text, keyboard=None):
     """Send message via Telegram Bot API"""
@@ -120,15 +120,11 @@ def telegram_webhook():
         users = load_users()
         
         if not users.get("admin_telegram_id"):
-            # Super simple: if message contains "setup", make admin
-            text_lower = text.lower() if text else ""
-            send_telegram_message(chat_id, f"DEBUG: text='{text}' | lower='{text_lower}' | has_setup={'setup' in text_lower}")
-            if "setup" in text_lower:
+            if text.strip().split("@")[0].lower() == "/setup":
                 sender_username = user_info.get("username", "")
                 users["admin_telegram_id"] = str(chat_id)
                 users["admin_username"] = sender_username
-                save_result = save_users(users)
-                send_telegram_message(chat_id, f"DEBUG: save_result={save_result} | GITHUB_REPO={GITHUB_REPO} | token_set={bool(GITHUB_TOKEN)}")
+                save_users(users)
                 send_telegram_message(chat_id, "\u2705 <b>Admin Set!</b>\n\nYou are now the admin of AniPix bot.\n\nCommands:\n/users - List all users\n/broadcast <message> - Send message to all users\n/stats - Show user stats\n/help - Show all commands")
                 return jsonify({"ok": True})
             else:
