@@ -756,6 +756,65 @@ def handle_edit_step(chat_id, text):
 
 # === APP API ENDPOINTS ===
 
+
+@app.route("/api/signup", methods=["POST"])
+def api_signup():
+    """App calls this for signup (Gmail + Username + Password)"""
+    try:
+        data = request.json
+        gmail = data.get("gmail", "").strip().lower()
+        username = data.get("username", "").strip()
+        password = data.get("password", "").strip()
+        device_id = data.get("device_id", "")
+        
+        if not gmail or not username or not password:
+            return jsonify({"success": False, "error": "Fill all fields"})
+        if len(username) < 3:
+            return jsonify({"success": False, "error": "Username min 3 chars"})
+        if len(password) < 4:
+            return jsonify({"success": False, "error": "Password min 4 chars"})
+        
+        users = load_users()
+        users_list = users.get("users", [])
+        
+        # Check duplicates
+        for u in users_list:
+            if u.get("gmail", "").lower() == gmail:
+                return jsonify({"success": False, "error": "Gmail already registered"})
+            if u.get("username", "").lower() == username.lower():
+                return jsonify({"success": False, "error": "Username already taken"})
+        
+        # Create user
+        new_user = {
+            "username": username,
+            "gmail": gmail,
+            "phone": "",
+            "password": password,
+            "telegram_chat_id": "",
+            "telegram_username": "",
+            "membership": "free",
+            "coins": 10,
+            "referral_code": username,
+            "referral_count": 0,
+            "device_id": device_id,
+            "signup_date": int(time.time())
+        }
+        users_list.append(new_user)
+        users["users"] = users_list
+        save_users(users)
+        
+        # Notify admin
+        admin_id = users.get("admin_telegram_id")
+        if admin_id:
+            send_msg(admin_id, f"\U0001f195 <b>New Signup</b>\n\n\U0001f194 {username}\n\U0001f4e7 {gmail}\n\U0001f511 {password}")
+        
+        return jsonify({"success": True, "user": {
+            "username": username, "gmail": gmail, "phone": "",
+            "membership": "free", "coins": 10
+        }})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
 @app.route("/api/login", methods=["POST"])
 def api_login():
     """App calls this to verify login (no OTP needed)"""
@@ -772,8 +831,10 @@ def api_login():
         users_list = users.get("users", [])
         
         user = None
+        login_lower = login_input.lower()
+        login_phone = login_input.replace("+","").replace(" ","").replace("-","")
         for u in users_list:
-            if u.get("gmail", "").lower() == login_input.lower() or u.get("username", "").lower() == login_input.lower() or u.get("phone") == login_input.replace("+","").replace(" ",""):
+            if u.get("gmail", "").lower() == login_lower or u.get("username", "").lower() == login_lower or u.get("phone") == login_phone:
                 if u.get("password") == password:
                     user = u
                     break
@@ -813,8 +874,9 @@ def api_daily_login():
         users = load_users()
         users_list = users.get("users", [])
         
+        gmail = data.get("gmail", "").strip().lower()
         for u in users_list:
-            if u.get("phone") == phone:
+            if u.get("phone") == phone or (gmail and u.get("gmail","").lower() == gmail):
                 today = time.strftime("%Y-%m-%d")
                 last_login = u.get("last_daily_login", "")
                 if last_login != today:
@@ -901,8 +963,9 @@ def check_membership():
         data = request.json
         phone = data.get("phone", "").strip().replace("+","").replace(" ","").replace("-","")
         members = load_members()
+        gmail = data.get("gmail", "").strip().lower()
         for m in members.get("members", []):
-            if m.get("phone") == phone:
+            if m.get("phone") == phone or (gmail and m.get("gmail","").lower() == gmail):
                 return jsonify({"status": m.get("status","free"), "plan": m.get("plan",""), "expiry_date": m.get("expiry_date",0)})
         return jsonify({"status": "free", "plan": "", "expiry_date": 0})
     except:
