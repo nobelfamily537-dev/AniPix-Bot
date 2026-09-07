@@ -70,6 +70,47 @@ def save_users(users_data):
         print(f"Save users error: {e}")
         return False
 
+MEMBERS_FILE = "members.json"
+
+def load_members():
+    """Load members.json from GitHub"""
+    try:
+        url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{MEMBERS_FILE}"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return resp.json()
+    except:
+        pass
+    return {"members": []}
+
+def save_members(members_data):
+    """Save members.json to GitHub"""
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{MEMBERS_FILE}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json"
+        }
+        resp = requests.get(url, headers=headers, timeout=10)
+        sha = resp.json().get("sha") if resp.status_code == 200 else None
+        
+        content = json.dumps(members_data, indent=2)
+        content_b64 = base64.b64encode(content.encode()).decode()
+        
+        data = {
+            "message": "Update members.json via bot",
+            "content": content_b64,
+            "branch": "main"
+        }
+        if sha:
+            data["sha"] = sha
+        
+        resp = requests.put(url, headers=headers, json=data, timeout=10)
+        return resp.status_code in [200, 201]
+    except Exception as e:
+        print(f"Save members error: {e}")
+        return False
+
 def send_telegram_message(chat_id, text, keyboard=None):
     """Send message via Telegram Bot API"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -210,6 +251,108 @@ Enjoy AniPix! \U0001f389"""
             free_count = len(users_list) - premium_count
             msg = f"\U0001f4ca <b>AniPix Stats</b>\n\n\U0001f465 Total Users: {len(users_list)}\n\u2b50 Premium: {premium_count}\n\U0001f193 Free: {free_count}"
             send_telegram_message(chat_id, msg)
+        
+        elif is_admin and text.strip().split("@")[0] == "/pending":
+            # Show pending membership requests
+            members = load_members()
+            pending = [m for m in members.get("members", []) if m.get("status") == "pending"]
+            if not pending:
+                send_telegram_message(chat_id, "\u2705 No pending membership requests.")
+            else:
+                msg_lines = [f"\U0001f4cb <b>Pending Requests: {len(pending)}</b>\n"]
+                for m in pending:
+                    phone = m.get("phone", "N/A")
+                    gmail = m.get("gmail", "N/A")
+                    uname = m.get("username", "N/A")
+                    plan = m.get("plan", "N/A")
+                    method = m.get("payment_method", "N/A")
+                    msg_lines.append(f"\U0001f4f1 {phone}\n\U0001f464 {uname}\n\U0001f4e7 {gmail}\n\U0001f4b0 {plan} ({method})\n---")
+                send_telegram_message(chat_id, "\n".join(msg_lines))
+        
+        elif is_admin and text.strip().split("@")[0].startswith("/approve"):
+            # Approve a membership request
+            parts = text.strip().split()
+            if len(parts) < 2:
+                send_telegram_message(chat_id, "Usage: /approve <phone_number>\nExample: /approve 918409143258")
+            else:
+                phone = parts[1].replace("+", "").replace(" ", "").replace("-", "")
+                members = load_members()
+                for m in members.get("members", []):
+                    if m.get("phone") == phone and m.get("status") == "pending":
+                        m["status"] = "active"
+                        m["approved_date"] = int(time.time())
+                        plan_days = {"4m": 120, "2y": 730, "3y": 1095, "5y": 1825}.get(m.get("plan", ""), 120)
+                        m["expiry_date"] = int(time.time()) + (plan_days * 86400)
+                        save_members(members)
+                        send_telegram_message(chat_id, f"\u2705 <b>Approved!</b>\n\n\U0001f464 {m.get('username', 'N/A')}\n\U0001f4f1 {phone}\n\U0001f4b0 Plan: {m.get('plan', 'N/A')}\n\u23f0 Valid for {plan_days} days")
+                        # Notify user if they have telegram
+                        if m.get("telegram_chat_id"):
+                            send_telegram_message(m["telegram_chat_id"], f"\u2b50 <b>Premium Activated!</b>\n\nYour AniPix Premium membership is now active!\nPlan: {m.get('plan', 'N/A')}\nEnjoy premium wallpapers! \U0001f389")
+                        break
+                else:
+                    send_telegram_message(chat_id, f"\u274c No pending request found for {phone}.")
+        
+        elif is_admin and text.strip().split("@")[0].startswith("/reject"):
+            # Reject a membership request
+            parts = text.strip().split()
+            if len(parts) < 2:
+                send_telegram_message(chat_id, "Usage: /reject <phone_number>")
+            else:
+                phone = parts[1].replace("+", "").replace(" ", "").replace("-", "")
+                members = load_members()
+                for m in members.get("members", []):
+                    if m.get("phone") == phone and m.get("status") == "pending":
+                        m["status"] = "rejected"
+                        m["rejected_date"] = int(time.time())
+                        save_members(members)
+                        send_telegram_message(chat_id, f"\u274c <b>Rejected</b>\n\n\U0001f4f1 {phone}\n\U0001f464 {m.get('username', 'N/A')}")
+                        break
+                else:
+                    send_telegram_message(chat_id, f"\u274c No pending request found for {phone}.")
+        
+        elif is_admin and text.strip().split("@")[0] == "/members":
+            # Show all active members
+            members = load_members()
+            active = [m for m in members.get("members", []) if m.get("status") == "active"]
+            if not active:
+                send_telegram_message(chat_id, "\U0001f4ca No active members yet.")
+            else:
+                msg_lines = [f"\U0001f4ca <b>Active Members: {len(active)}</b>\n"]
+                for m in active[-20:]:
+                    phone = m.get("phone", "N/A")
+                    uname = m.get("username", "N/A")
+                    plan = m.get("plan", "N/A")
+                    msg_lines.append(f"\u2b50 {uname} | {phone} | {plan}")
+                if len(active) > 20:
+                    msg_lines.append(f"\n... and {len(active) - 20} more")
+                send_telegram_message(chat_id, "\n".join(msg_lines))
+        
+        elif is_admin and text.strip().split("@")[0].startswith("/addmember"):
+            # Direct add member: /addmember <phone> <plan>
+            parts = text.strip().split()
+            if len(parts) < 3:
+                send_telegram_message(chat_id, "Usage: /addmember <phone> <plan>\nPlans: 4m, 2y, 3y, 5y\nExample: /addmember 918409143258 4m")
+            else:
+                phone = parts[1].replace("+", "").replace(" ", "").replace("-", "")
+                plan = parts[2].lower()
+                plan_days = {"4m": 120, "2y": 730, "3y": 1095, "5y": 1825}.get(plan)
+                if not plan_days:
+                    send_telegram_message(chat_id, "Invalid plan. Use: 4m, 2y, 3y, or 5y")
+                else:
+                    members = load_members()
+                    new_member = {
+                        "phone": phone,
+                        "username": "manual_add",
+                        "gmail": "",
+                        "plan": plan,
+                        "status": "active",
+                        "payment_method": "manual",
+                        "approved_date": int(time.time()),
+                        "expiry_date": int(time.time()) + (plan_days * 86400)
+                    }
+                    members.setdefault("members", []).append(new_member)
+                    save_members(members)
+                    send_telegram_message(chat_id, f"\u2705 <b>Member Added!</b>\n\n\U0001f4f1 {phone}\n\U0001f4b0 Plan: {plan} ({plan_days} days)")
         
         else:
             clean_text = text.strip().replace("+", "").replace(" ", "").replace("-", "")
@@ -381,6 +524,76 @@ def get_webhook_info():
         return f"<pre>{resp.text}</pre>"
     except Exception as e:
         return f"Error: {e}"
+
+@app.route("/api/request-membership", methods=["POST"])
+def request_membership():
+    """App calls this when user requests membership"""
+    try:
+        data = request.json
+        phone = data.get("phone", "").strip().replace("+", "").replace(" ", "").replace("-", "")
+        gmail = data.get("gmail", "").strip()
+        username = data.get("username", "").strip()
+        plan = data.get("plan", "").strip()
+        payment_method = data.get("payment_method", "").strip()
+        telegram_chat_id = data.get("telegram_chat_id")
+        
+        if not phone or not plan:
+            return jsonify({"success": False, "error": "Missing phone or plan"})
+        
+        members = load_members()
+        member_list = members.get("members", [])
+        
+        # Check if already pending or active
+        for m in member_list:
+            if m.get("phone") == phone:
+                if m.get("status") == "active":
+                    return jsonify({"success": False, "error": "You already have an active membership."})
+                if m.get("status") == "pending":
+                    return jsonify({"success": False, "error": "Your request is already pending. Please wait for approval."})
+        
+        # Add new pending request
+        new_request = {
+            "phone": phone,
+            "gmail": gmail,
+            "username": username,
+            "plan": plan,
+            "payment_method": payment_method,
+            "telegram_chat_id": telegram_chat_id,
+            "status": "pending",
+            "request_date": int(time.time())
+        }
+        member_list.append(new_request)
+        members["members"] = member_list
+        save_members(members)
+        
+        # Notify admin
+        users = load_users()
+        if users.get("admin_telegram_id"):
+            send_telegram_message(users["admin_telegram_id"], f"\U0001f4cb <b>New Membership Request</b>\n\n\U0001f464 {username}\n\U0001f4f1 {phone}\n\U0001f4e7 {gmail}\n\U0001f4b0 Plan: {plan}\n\U0001f4b3 Payment: {payment_method}\n\nUse: /approve {phone}")
+        
+        return jsonify({"success": True, "message": "Membership request sent! Admin will approve soon."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/api/check-membership", methods=["POST"])
+def check_membership():
+    """App calls this to check membership status"""
+    try:
+        data = request.json
+        phone = data.get("phone", "").strip().replace("+", "").replace(" ", "").replace("-", "")
+        
+        members = load_members()
+        for m in members.get("members", []):
+            if m.get("phone") == phone:
+                return jsonify({
+                    "status": m.get("status", "free"),
+                    "plan": m.get("plan", ""),
+                    "expiry_date": m.get("expiry_date", 0)
+                })
+        
+        return jsonify({"status": "free", "plan": "", "expiry_date": 0})
+    except Exception as e:
+        return jsonify({"status": "free", "error": str(e)})
 
 @app.route("/health", methods=["GET"])
 def health():
